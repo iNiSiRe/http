@@ -3,18 +3,29 @@
 namespace React\Http;
 
 use Evenement\EventEmitter;
+use React\Http\Foundation\HeaderDictionary;
+use React\Http\Utils\Dictionary;
 use React\Stream\ReadableStreamInterface;
 use React\Stream\WritableStreamInterface;
 use React\Stream\Util;
 
 class Request extends EventEmitter implements ReadableStreamInterface
 {
+    /**
+     * @var Dictionary
+     */
+    public $attributes;
+
+    /**
+     * @var HeaderDictionary
+     */
+    public $headers;
+
     private $readable = true;
     private $method;
     private $path;
     private $query;
     private $httpVersion;
-    private $headers;
     private $body;
 
     // metadata, implicitly added externally
@@ -26,8 +37,10 @@ class Request extends EventEmitter implements ReadableStreamInterface
         $this->path = $path;
         $this->query = $query;
         $this->httpVersion = $httpVersion;
-        $this->headers = $headers;
+        $this->headers = new HeaderDictionary($headers);
         $this->body = $body;
+
+        $this->attributes = new Dictionary();
     }
 
     public function getMethod()

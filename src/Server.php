@@ -17,12 +17,21 @@ class Server extends EventEmitter implements ServerInterface
     {
         $this->io = $io;
 
-        $connectionHandler = new ConnectionHandler();
-        $requestHandler = new RequestHandler();
-        $this->io->on('connection', [$connectionHandler, 'handle']);
+        $this->io->on('connection', function (ConnectionInterface $connection) {
+            $connectionHandler = new ConnectionHandler();
+            $requestHandler = new RequestHandler();
 
-        $connectionHandler->on('request', );
+            // Handle connection
+            $connectionHandler->handle($connection);
 
+            // Handle request
+            $connectionHandler->on('request', [$requestHandler, 'handle']);
+
+            // Handle processed request
+            $requestHandler->on('request', function (Request $request) use ($connection) {
+                $this->emitRequest($connection, $request);
+            });
+        });
     }
 
     public function emitRequest(ConnectionInterface $connection, Request $request)

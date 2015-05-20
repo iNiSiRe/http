@@ -23,19 +23,32 @@ class ConnectionHandler extends EventEmitter
         // TODO: chunked transfer encoding (also for outgoing data)
         // TODO: multipart parsing
 
-        $connection->once('data', array($this, 'handleData'));
+        $connection->once('data', function ($data) use ($connection) {
+            $request = $this->createRequest($data);
+
+            $connection->on('data', function ($data) use ($request) {
+                $request->emit('data', array($data));
+            });
+
+            $this->emit('request', array($request));
+        });
     }
 
-    public function handleData($data)
+    /**
+     * @param $data
+     *
+     * @return \React\Http\Request
+     */
+    public function createRequest($data)
     {
         if (strlen($data) > $this->maxSize) {
             $this->emit('error', array(new \OverflowException("Maximum header size of {$this->maxSize} exceeded."), $this));
 
-            return;
+            return false;
         }
 
         $requestParser = new RequestParser();
-        $request = $requestParser->parse($data);
-        $this->emit('request', array($request));
+
+        return $requestParser->parse($data);
     }
 }
