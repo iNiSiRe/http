@@ -15,17 +15,19 @@ class Request extends EventEmitter implements ReadableStreamInterface
     private $query;
     private $httpVersion;
     private $headers;
+    private $body;
 
     // metadata, implicitly added externally
     public $remoteAddress;
 
-    public function __construct($method, $path, $query = array(), $httpVersion = '1.1', $headers = array())
+    public function __construct($method, $path, $query = array(), $httpVersion = '1.1', $headers = array(), $body = '')
     {
         $this->method = $method;
         $this->path = $path;
         $this->query = $query;
         $this->httpVersion = $httpVersion;
         $this->headers = $headers;
+        $this->body = $body;
     }
 
     public function getMethod()
@@ -85,5 +87,26 @@ class Request extends EventEmitter implements ReadableStreamInterface
         Util::pipe($this, $dest, $options);
 
         return $dest;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getBody()
+    {
+        return $this->body;
+    }
+
+    /**
+     * @param mixed $body
+     */
+    public function setBody($body)
+    {
+        $this->body = $body;
+    }
+
+    public function addBody($body)
+    {
+        $this->body .= $body;
     }
 }

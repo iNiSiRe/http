@@ -3,6 +3,8 @@
 namespace React\Http;
 
 use Evenement\EventEmitter;
+use React\Http\Handler\ConnectionHandler;
+use React\Http\Handler\RequestHandler;
 use React\Socket\ServerInterface as SocketServerInterface;
 use React\Socket\ConnectionInterface;
 
@@ -15,40 +17,17 @@ class Server extends EventEmitter implements ServerInterface
     {
         $this->io = $io;
 
-        $this->io->on('connection', function (ConnectionInterface $conn) {
-            // TODO: http 1.1 keep-alive
-            // TODO: chunked transfer encoding (also for outgoing data)
-            // TODO: multipart parsing
+        $connectionHandler = new ConnectionHandler();
+        $requestHandler = new RequestHandler();
+        $this->io->on('connection', [$connectionHandler, 'handle']);
 
-            $parser = new RequestHeaderParser();
-            $parser->on('headers', function (Request $request, $bodyBuffer) use ($conn, $parser) {
-                // attach remote ip to the request as metadata
-                $request->remoteAddress = $conn->getRemoteAddress();
+        $connectionHandler->on('request', );
 
-                $this->handleRequest($conn, $request, $bodyBuffer);
-
-                $conn->removeListener('data', array($parser, 'feed'));
-                $conn->on('end', function () use ($request) {
-                    $request->emit('end');
-                });
-                $conn->on('data', function ($data) use ($request) {
-                    $request->emit('data', array($data));
-                });
-                $request->on('pause', function () use ($conn) {
-                    $conn->emit('pause');
-                });
-                $request->on('resume', function () use ($conn) {
-                    $conn->emit('resume');
-                });
-            });
-
-            $conn->on('data', array($parser, 'feed'));
-        });
     }
 
-    public function handleRequest(ConnectionInterface $conn, Request $request, $bodyBuffer)
+    public function emitRequest(ConnectionInterface $connection, Request $request)
     {
-        $response = new Response($conn);
+        $response = new Response($connection);
         $response->on('close', array($request, 'close'));
 
         if (!$this->listeners('request')) {
@@ -58,6 +37,10 @@ class Server extends EventEmitter implements ServerInterface
         }
 
         $this->emit('request', array($request, $response));
-        $request->emit('data', array($bodyBuffer));
+    }
+
+    public function emitRequestData(Request $request, $data)
+    {
+        $request->emit('data', array($data));
     }
 }
