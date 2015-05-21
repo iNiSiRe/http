@@ -9,6 +9,7 @@
 namespace React\Http\Processor;
 
 use Evenement\EventEmitter;
+use React\Http\Foundation\File;
 use React\Http\Foundation\HeaderDictionary;
 use React\Http\Request;
 
@@ -105,12 +106,20 @@ class MultipartDataProcessor extends EventEmitter
                 continue;
             }
 
-            if (!preg_match("/^(.*)\r\n\r\n(.*)$/", $block, $matches)) {
-                continue;
+            if (strpos($block, "\r\n\r\n") === false) {
+                if (false !== $endFlagPosition = strpos($block, "\r\n")) {
+                    $body = substr($block, 0, $endFlagPosition - 1);
+                } else {
+                    $body = $block;
+                }
+                $headers = new HeaderDictionary();
+            } elseif (!preg_match("/^(.*)\r\n\r\n(.*)\r\n$/", $block, $matches)) {
+                $headers = $this->parseHeaders($matches[1]);
+                $body = $matches[2];
+            } else {
+                $headers = new HeaderDictionary();
+                $body = $block;
             }
-
-            $headers = $this->parseHeaders($matches[1]);
-            $body = $matches[2];
 
             switch (true) {
                 case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
@@ -121,6 +130,9 @@ class MultipartDataProcessor extends EventEmitter
                 case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
                     $this->state = self::STATE_LISTEN_STREAM;
+                    $file = new File($matches[2], $headers->get('Content-Type'));
+                    $this->emit('file', [$file]);
+                    $file->emit('data', $body);
 
                     break;
             }
