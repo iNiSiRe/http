@@ -14,7 +14,12 @@ use Evenement\EventEmitter;
 class File extends EventEmitter
 {
     private $name;
+
+    /**
+     * @var string
+     */
     private $path;
+
     private $type;
 
     public function __construct($name = null, $type = null, $path = null)
@@ -54,5 +59,10 @@ class File extends EventEmitter
     public function setPath($path)
     {
         $this->path = $path;
+    }
+
+    public function __toString()
+    {
+        return $this->path;
     }
 }

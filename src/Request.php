@@ -17,6 +17,11 @@ class Request extends EventEmitter implements ReadableStreamInterface
     public $attributes;
 
     /**
+     * @var Dictionary
+     */
+    public $files;
+
+    /**
      * @var HeaderDictionary
      */
     public $headers;
@@ -41,6 +46,7 @@ class Request extends EventEmitter implements ReadableStreamInterface
         $this->body = $body;
 
         $this->attributes = new Dictionary();
+        $this->files = new Dictionary();
     }
 
     public function getMethod()

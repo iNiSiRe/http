@@ -17,8 +17,14 @@ class MultipartDataProcessor extends EventEmitter
 {
     const STATE_READY = 1;
     const STATE_LISTEN_STREAM = 2;
+    const STATE_END_LISTEN_STREAM = 3;
 
     private $state = self::STATE_READY;
+
+    /**
+     * @var File
+     */
+    private $file = null;
 
     public function __construct(Request $request)
     {
@@ -106,33 +112,47 @@ class MultipartDataProcessor extends EventEmitter
                 continue;
             }
 
-            if (strpos($block, "\r\n\r\n") === false) {
+            if (preg_match("/^(.*)\r\n\r\n(.*)\r\n$/", $block, $matches)) {
+                $headers = $this->parseHeaders($matches[1]);
+                $body = $matches[2];
+            } elseif (strpos($block, "\r\n\r\n") !== false) {
+                list ($headers, $body) = explode("\r\n\r\n", $block);
+                $headers = $this->parseHeaders($headers);
+            } else {
                 if (false !== $endFlagPosition = strpos($block, "\r\n")) {
-                    $body = substr($block, 0, $endFlagPosition - 1);
+                    $body = substr($block, 0, $endFlagPosition);
+                    $this->state = self::STATE_END_LISTEN_STREAM;
                 } else {
                     $body = $block;
                 }
                 $headers = new HeaderDictionary();
-            } elseif (!preg_match("/^(.*)\r\n\r\n(.*)\r\n$/", $block, $matches)) {
-                $headers = $this->parseHeaders($matches[1]);
-                $body = $matches[2];
-            } else {
-                $headers = new HeaderDictionary();
-                $body = $block;
             }
 
             switch (true) {
-                case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
-                    $this->request->attributes->set($matches[1], $body);
-
+                case ($this->state == self::STATE_LISTEN_STREAM && $this->file !== null):
+                    $this->file->emit('data', [$body]);
                     break;
+
+                case ($this->state == self::STATE_END_LISTEN_STREAM && $this->file !== null):
+                    $this->file->emit('end', [$body]);
+                    $this->file = null;
+                    $this->state = self::STATE_READY;
+                    break;
+
                 case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
                     $this->state = self::STATE_LISTEN_STREAM;
                     $file = new File($matches[2], $headers->get('Content-Type'));
-                    $this->emit('file', [$file]);
-                    $file->emit('data', $body);
+                    $this->request->emit('form.file', [$matches[1], $file]);
+                    $file->emit('data', [$body]);
+                    $this->file = $file;
+
+                    break;
+
+                case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
+
+                    $this->request->emit('form.field', [$matches[1], $body]);
 
                     break;
             }
