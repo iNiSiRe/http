@@ -19,7 +19,9 @@ class MultipartDataProcessor extends EventEmitter
     const STATE_LISTEN_STREAM = 2;
     const STATE_END_LISTEN_STREAM = 3;
 
-    private $state = self::STATE_READY;
+    const STATE_BEGIN = 1;
+
+    private $state = self::STATE_BEGIN;
 
     /**
      * @var File
@@ -50,14 +52,6 @@ class MultipartDataProcessor extends EventEmitter
             $this->uploadFile($string);
             return;
         }
-
-        // This may never be called, if an octet stream
-        // has a filename it is catched by the previous
-        // condition already.
-//        if (strpos($string, 'application/octet-stream') !== false) {
-//            $this->octetStream($string);
-//            return;
-//        }
 
         $this->parseRequestParameter($string);
     }
@@ -162,4 +156,20 @@ class MultipartDataProcessor extends EventEmitter
             $this->emit('end');
         }
     }
+
+    protected function parseData2($boundary, $data)
+    {
+        switch (true) {
+
+            case $this->state == self::STATE_BEGIN:
+
+                $delimiter = sprintf('--%s--%s', $boundary, "\r\n");
+                if (false === $offset = strpos($data, $delimiter)) {
+
+                }
+
+                break;
+        }
+    }
+
 }
