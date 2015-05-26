@@ -16,12 +16,13 @@ use React\Http\Request;
 class MultipartDataProcessor extends EventEmitter
 {
     const STATE_READY = 1;
-    const STATE_LISTEN_STREAM = 2;
+    const STATE_FILE_DATA = 2;
     const STATE_END_LISTEN_STREAM = 3;
 
-    const STATE_BEGIN = 1;
+    const STATE_BLOCK_BEGIN = 1;
+    const STATE_BLOCK_HEADER = 2;
 
-    private $state = self::STATE_BEGIN;
+    private $state = self::STATE_BLOCK_BEGIN;
 
     /**
      * @var File
@@ -36,7 +37,7 @@ class MultipartDataProcessor extends EventEmitter
 
     public function process($data)
     {
-        $this->parseData($this->boundary, $data);
+        $this->parseData2($this->boundary, $data);
     }
 
     protected function parseBoundary($header)
@@ -124,7 +125,7 @@ class MultipartDataProcessor extends EventEmitter
 
             switch (true) {
 
-                case ($this->state == self::STATE_LISTEN_STREAM && $this->file !== null):
+                case ($this->state == self::STATE_FILE_DATA && $this->file !== null):
                     $this->file->emit('data', [$body]);
                     break;
 
@@ -136,7 +137,7 @@ class MultipartDataProcessor extends EventEmitter
 
                 case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
-                    $this->state = self::STATE_LISTEN_STREAM;
+                    $this->state = self::STATE_FILE_DATA;
                     $file = new File($matches[2], $headers->get('Content-Type'));
                     $this->request->emit('form.file', [$matches[1], $file]);
                     $file->emit('data', [$body]);
@@ -159,16 +160,48 @@ class MultipartDataProcessor extends EventEmitter
 
     protected function parseData2($boundary, $data)
     {
-        switch (true) {
+        $parseDone = false;
 
-            case $this->state == self::STATE_BEGIN:
+        $offset = 0;
 
-                $delimiter = sprintf('--%s--%s', $boundary, "\r\n");
-                if (false === $offset = strpos($data, $delimiter)) {
+        while (!$parseDone) {
 
-                }
+            switch (true) {
+                case $this->state == self::STATE_BLOCK_BEGIN:
 
-                break;
+                    $delimiter = sprintf('--%s%s', $boundary, "\r\n");
+
+                    if (false === $position = strpos($data, $delimiter, $offset)) {
+                        throw new \Exception('Bad multipart request');
+                    }
+
+                    $offset = $position;
+
+                    $delimiter = "\r\n\r\n";
+
+                    if (false === $position = strpos($data, $delimiter, $offset)) {
+                        throw new \Exception('Bad multipart headers');
+                    }
+
+                    $headers = $this->parseHeaders(substr($data, $offset, $position - $offset));
+
+                    switch (true) {
+                        case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
+
+                            $state = self::STATE_FILE_DATA;
+                            $file = new File($matches[2], $headers->get('Content-Type'));
+
+                            break;
+
+                        case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
+
+                            $this->request->emit('form.field', [$matches[1], $body]);
+
+                            break;
+                    }
+
+                    break;
+            }
         }
     }
 
