@@ -21,6 +21,7 @@ class MultipartDataProcessor extends EventEmitter
 
     const STATE_BLOCK_BEGIN = 1;
     const STATE_BLOCK_HEADER = 2;
+    const STATE_FIELD_DATA = 3;
 
     private $state = self::STATE_BLOCK_BEGIN;
 
@@ -175,7 +176,7 @@ class MultipartDataProcessor extends EventEmitter
                         throw new \Exception('Bad multipart request');
                     }
 
-                    $offset = $position;
+                    $offset = $position + 1;
 
                     $delimiter = "\r\n\r\n";
 
@@ -185,16 +186,26 @@ class MultipartDataProcessor extends EventEmitter
 
                     $headers = $this->parseHeaders(substr($data, $offset, $position - $offset));
 
+                    $offset = $position + 1;
+
                     switch (true) {
                         case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
-                            $state = self::STATE_FILE_DATA;
+                            $this->state = self::STATE_FILE_DATA;
                             $file = new File($matches[2], $headers->get('Content-Type'));
 
                             break;
 
                         case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
+                            $delimiter = sprintf('--%s%s', $boundary, "\r\n");
+
+                            if (false === $position = strpos($data, $delimiter, $offset)) {
+                                $this->state = self::STATE_FIELD_DATA;
+                                
+                            }
+
+                            $body = substr($data, $offset, $position - $offset);
                             $this->request->emit('form.field', [$matches[1], $body]);
 
                             break;
