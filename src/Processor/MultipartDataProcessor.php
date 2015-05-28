@@ -25,6 +25,8 @@ class MultipartDataProcessor extends EventEmitter
 
     private $state = self::STATE_BLOCK_BEGIN;
 
+    private $processingScope = null;
+
     /**
      * @var File
      */
@@ -192,8 +194,8 @@ class MultipartDataProcessor extends EventEmitter
                         case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
                             $this->state = self::STATE_FILE_DATA;
-                            $file = new File($matches[2], $headers->get('Content-Type'));
-
+                            $this->processingScope = new Scope($matches[2], [$headers->get('Content-Type')]);
+                            $this->request->emit('form.file', [$this->processingScope, ]);
                             break;
 
                         case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
@@ -202,7 +204,7 @@ class MultipartDataProcessor extends EventEmitter
 
                             if (false === $position = strpos($data, $delimiter, $offset)) {
                                 $this->state = self::STATE_FIELD_DATA;
-                                
+
                             }
 
                             $body = substr($data, $offset, $position - $offset);
