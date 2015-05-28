@@ -8,7 +8,7 @@
 
 namespace React\Http\Processor;
 
-class FileScope extends Scope
+class FileFormField extends FormField
 {
     public function __construct()
     {

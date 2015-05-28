@@ -36,11 +36,13 @@ class MultipartDataProcessor extends EventEmitter
     {
         $this->request = $request;
         $this->boundary = $this->parseBoundary($request->headers->get('Content-Type'));
+
+        $this->on('process', [$this, 'parseData2']);
     }
 
     public function process($data)
     {
-        $this->parseData2($this->boundary, $data);
+        $this->emit('process', [$data]);
     }
 
     protected function parseBoundary($header)
@@ -72,7 +74,7 @@ class MultipartDataProcessor extends EventEmitter
 
     protected function parseHeaders($rawHeaders)
     {
-        $headers = array();;
+        $headers = array();
 
         foreach (explode("\n", $rawHeaders) as $i => $h) {
             $h = explode(':', $h, 2);
@@ -161,24 +163,30 @@ class MultipartDataProcessor extends EventEmitter
         }
     }
 
-    protected function parseData2($boundary, $data)
+    protected function parseData2($data)
     {
         $parseDone = false;
 
         $offset = 0;
 
-        while (!$parseDone) {
+        while (!$parseDone && $offset < strlen($data)) {
 
             switch (true) {
                 case $this->state == self::STATE_BLOCK_BEGIN:
 
-                    $delimiter = sprintf('--%s%s', $boundary, "\r\n");
+                    $delimiter = sprintf('--%s', $this->boundary);
 
                     if (false === $position = strpos($data, $delimiter, $offset)) {
                         throw new \Exception('Bad multipart request');
                     }
 
-                    $offset = $position + 1;
+                    $offset = strlen($delimiter) + $position;
+
+                    if ($offset === strpos($data, '--', $offset)) {
+                        $this->emit('end');
+                        $parseDone = true;
+                        break;
+                    }
 
                     $delimiter = "\r\n\r\n";
 
@@ -186,35 +194,83 @@ class MultipartDataProcessor extends EventEmitter
                         throw new \Exception('Bad multipart headers');
                     }
 
-                    $headers = $this->parseHeaders(substr($data, $offset, $position - $offset));
+                    $rawHeaders = substr($data, $offset, $position - $offset);
+                    $headers = $this->parseHeaders($rawHeaders);
 
-                    $offset = $position + 1;
+                    $offset = $position + strlen($delimiter);
 
                     switch (true) {
                         case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
-                            $this->state = self::STATE_FILE_DATA;
-                            $this->processingScope = new Scope($matches[2], [$headers->get('Content-Type')]);
-                            $this->request->emit('form.file', [$this->processingScope, ]);
+                            $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
+
+                            $field = new FormField($matches[1]);
+
+                            if (false === $position = strpos($data, $delimiter, $offset)) {
+                                $this->state = self::STATE_FILE_DATA;
+                                $data = substr($data, $offset);
+                                $parseDone = true;
+                            } else {
+                                $data = substr($data, $offset, $position - $offset);
+                            }
+
+                            $this->request->emit('form.file', [$field, $matches[2]]);
+                            $field->emit('data', [$data]);
+
+                            if (false === $position) {
+                                $this->removeAllListeners('process');
+                                $this->on('process', function ($data) use ($field) {
+                                    $this->processFileData($field, $data);
+                                });
+                            }
+
+                            $offset = $position;
+
                             break;
 
                         case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
-                            $delimiter = sprintf('--%s%s', $boundary, "\r\n");
+                            $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
 
                             if (false === $position = strpos($data, $delimiter, $offset)) {
                                 $this->state = self::STATE_FIELD_DATA;
-
+                                $body = substr($data, $offset);
+                                $parseDone = true;
+                            } else {
+                                $body = substr($data, $offset, $position - $offset);
                             }
 
-                            $body = substr($data, $offset, $position - $offset);
-                            $this->request->emit('form.field', [$matches[1], $body]);
+                            $field = new FormField($matches[1]);
+                            $this->request->emit('form.field', [$field]);
+                            $field->emit('data', [$body]);
+
+                            $offset = $position;
 
                             break;
                     }
 
                     break;
             }
+        }
+    }
+
+    private function processFileData(FormField $field, $data)
+    {
+        $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
+
+        if (false === $position = strpos($data, $delimiter)) {
+            $fileData = $data;
+        } else {
+            $fileData = substr($data, 0, $position);
+        }
+
+        $field->emit('data', [$fileData]);
+
+        if (false !== $position) {
+            $this->removeAllListeners('process');
+            $this->on('process', [$this, 'parseData2']);
+            $this->state = self::STATE_BLOCK_BEGIN;
+            $this->parseData2(substr($data, $position, -1));
         }
     }
 
