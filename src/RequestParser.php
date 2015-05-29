@@ -11,6 +11,11 @@ use Guzzle\Parser\Message\MessageParser;
  */
 class RequestParser extends EventEmitter
 {
+    /**
+     * @param $data
+     *
+     * @return array
+     */
     public function parse($data)
     {
         $parser = new MessageParser();
@@ -26,10 +31,9 @@ class RequestParser extends EventEmitter
             $parsed['request_url']['path'],
             $parsedQuery,
             $parsed['version'],
-            $parsed['headers'],
-            $parsed['body']
+            $parsed['headers']
         );
 
-        return $request;
+        return array($request, $parsed['body']);
     }
 }

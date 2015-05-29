@@ -1,19 +1,17 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: inisire
- * Date: 20.05.15
- * Time: 17:44
- */
 
 namespace React\Http\Handler;
-
 
 use Evenement\EventEmitter;
 use React\Http\Processor\DataProcessorFactory;
 use React\Http\Processor\MultipartDataProcessor;
 use React\Http\Request;
 
+/**
+ * Class RequestHandler
+ *
+ * @package React\Http\Handler
+ */
 class RequestHandler extends EventEmitter
 {
     /**
@@ -26,15 +24,19 @@ class RequestHandler extends EventEmitter
      */
     protected $processor;
 
+    /**
+     * Create request handler
+     */
     public function __construct()
     {
         $this->processorFactory = new DataProcessorFactory();
     }
 
+    /**
+     * @param Request $request
+     */
     public function handle(Request $request)
     {
-        $this->emit('request', array($request));
-
         $this->processor = $this->processorFactory->get($request);
 
         if ($this->processor === null) {
@@ -42,19 +44,14 @@ class RequestHandler extends EventEmitter
             return;
         }
 
-        $this->processor->on('end', function () use ($request) {
-            $request->emit('end');
-        });
-
-        $this->processData($request->getBody());
-
-        $request->on('data', function ($data) use ($request) {
-            $this->processData($data);
-        });
+        $request->on('data', [$this, 'processData']);
     }
 
+    /**
+     * @param $data
+     */
     public function processData($data)
     {
-        $this->processor->process( $data);
+        $this->processor->process($data);
     }
 }

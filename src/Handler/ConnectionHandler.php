@@ -10,6 +10,7 @@ namespace React\Http\Handler;
 
 
 use Evenement\EventEmitter;
+use React\Http\Request;
 use React\Http\RequestParser;
 use React\Socket\ConnectionInterface;
 
@@ -19,25 +20,33 @@ class ConnectionHandler extends EventEmitter
 
     public function handle(ConnectionInterface $connection)
     {
-        // TODO: http 1.1 keep-alive
-        // TODO: chunked transfer encoding (also for outgoing data)
-        // TODO: multipart parsing
-
         $connection->once('data', function ($data) use ($connection) {
-            $request = $this->createRequest($data);
+            $result = $this->createRequest($data);
+
+            if (!$result) {
+                return;
+            }
+
+            /**
+             * @var Request $request
+             * @var string  $body
+             */
+            list ($request, $body) = $result;
 
             $connection->on('data', function ($data) use ($request) {
                 $request->emit('data', array($data));
             });
 
             $this->emit('request', array($request));
+
+            $request->emit('data', [$body]);
         });
     }
 
     /**
      * @param $data
      *
-     * @return \React\Http\Request
+     * @return array
      */
     public function createRequest($data)
     {
