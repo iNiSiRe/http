@@ -33,11 +33,22 @@ class ConnectionHandler extends EventEmitter
              */
             list ($request, $body) = $result;
 
+            $this->emit('request', array($request));
+
             $connection->on('data', function ($data) use ($request) {
                 $request->emit('data', array($data));
             });
 
-            $this->emit('request', array($request));
+            $connection->on('end', function () use ($request) {
+                $request->emit('end');
+            });
+
+            $request->on('pause', function () use ($connection) {
+                $connection->emit('pause');
+            });
+            $request->on('resume', function () use ($connection) {
+                $connection->emit('resume');
+            });
 
             $request->emit('data', [$body]);
         });
