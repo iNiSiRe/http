@@ -20,7 +20,7 @@ class ConnectionHandler extends EventEmitter
 
     public function handle(ConnectionInterface $connection)
     {
-        $connection->once('data', function ($data) use ($connection) {
+        $connection->once('data', function ($data, $c, $end) use ($connection) {
             $result = $this->createRequest($data);
 
             if (!$result) {
@@ -35,12 +35,8 @@ class ConnectionHandler extends EventEmitter
 
             $this->emit('request', array($request));
 
-            $connection->on('data', function ($data) use ($request) {
-                $request->emit('data', array($data));
-            });
-
-            $connection->on('end', function () use ($request) {
-                $request->emit('end');
+            $connection->on('data', function ($data, $connection, $end) use ($request) {
+                $request->emit('data', array($data, $end));
             });
 
             $request->on('pause', function () use ($connection) {
@@ -50,7 +46,7 @@ class ConnectionHandler extends EventEmitter
                 $connection->emit('resume');
             });
 
-            $request->emit('data', [$body]);
+            $request->emit('data', [$body, $end]);
         });
     }
 

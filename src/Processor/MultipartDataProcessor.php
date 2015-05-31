@@ -16,8 +16,7 @@ use React\Http\Request;
 /**
  * Class MultipartDataProcessor
  *
- * @event form.file
- * @event form.field
+ * @event data
  *
  * @package React\Http\Processor
  */
@@ -50,9 +49,9 @@ class MultipartDataProcessor extends AbstractProcessor
         $this->boundary = $this->parseBoundary($request->headers->get('Content-Type'));
     }
 
-    public function process($data)
+    public function process($data, $isEnd = false)
     {
-        $this->events->emit('data', [$data]);
+        $this->events->emit('data', [$data, $isEnd]);
     }
 
     protected function parseBoundary($header)
@@ -88,11 +87,12 @@ class MultipartDataProcessor extends AbstractProcessor
     /**
      * Base data processor
      *
-     * @param $data
+     * @param      $data
+     * @param bool $isEnd
      *
      * @throws \Exception
      */
-    protected function parseData($data)
+    protected function parseData($data, $isEnd = false)
     {
         $parseDone = false;
         $offset = 0;
@@ -109,7 +109,7 @@ class MultipartDataProcessor extends AbstractProcessor
 
             if ($offset === strpos($data, '--', $offset)) {
                 $this->emit('end');
-                break;
+                return;
             }
 
             $delimiter = "\r\n\r\n";
@@ -129,22 +129,26 @@ class MultipartDataProcessor extends AbstractProcessor
                     $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
 
                     $field = new FormField($matches[1]);
+                    $field->attributes->set('original_filename', $matches[2]);
+                    $field->setFile(true);
 
                     if (false === $position = strpos($data, $delimiter, $offset)) {
-                        $this->state = self::STATE_FILE_DATA;
-                        $data = substr($data, $offset);
+                        $fileData = substr($data, $offset);
                         $parseDone = true;
                     } else {
-                        $data = substr($data, $offset, $position - $offset);
+                        $fileData = substr($data, $offset, $position - $offset);
                     }
 
-                    $this->emit('form.file', [$field, $matches[2]]);
-                    $field->emit('data', [$data]);
+                    $this->emit('data', [$field]);
+
+                    if (!empty($fileData)) {
+                        $field->emit('data', [$fileData]);
+                    }
 
                     if (false === $position) {
                         $this->events->removeAllListeners('data');
-                        $this->events->on('data', function ($data) use ($field) {
-                            $this->processFileData($field, $data);
+                        $this->events->on('data', function ($data, $isEnd) use ($field) {
+                            $this->processFileData($field, $data, $isEnd);
                         });
                     }
 
@@ -157,7 +161,6 @@ class MultipartDataProcessor extends AbstractProcessor
                     $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
 
                     if (false === $position = strpos($data, $delimiter, $offset)) {
-                        $this->state = self::STATE_FIELD_DATA;
                         $body = substr($data, $offset);
                         $parseDone = true;
                     } else {
@@ -165,7 +168,7 @@ class MultipartDataProcessor extends AbstractProcessor
                     }
 
                     $field = new FormField($matches[1]);
-                    $this->emit('form.field', [$field]);
+                    $this->emit('data', [$field]);
                     $field->emit('data', [$body]);
 
                     $offset = $position;
@@ -173,15 +176,20 @@ class MultipartDataProcessor extends AbstractProcessor
                     break;
             }
         }
+
+        if ($isEnd) {
+            $this->emit('end');
+        }
     }
 
     /**
      * @param FormField $field
      * @param           $data
+     * @param bool      $isEnd
      *
      * @throws \Exception
      */
-    private function processFileData(FormField $field, $data)
+    private function processFileData(FormField $field, $data, $isEnd = false)
     {
         $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
 
@@ -199,7 +207,7 @@ class MultipartDataProcessor extends AbstractProcessor
             $this->events->on('data', [$this, 'parseData']);
 
             $this->state = self::STATE_BLOCK_BEGIN;
-            $this->parseData(substr($data, $position, -1));
+            $this->parseData(substr($data, $position), $isEnd);
         }
     }
 

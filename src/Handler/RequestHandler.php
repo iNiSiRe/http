@@ -4,6 +4,7 @@ namespace React\Http\Handler;
 
 use Evenement\EventEmitter;
 use React\Http\Processor\DataProcessorFactory;
+use React\Http\Processor\FormField;
 use React\Http\Processor\MultipartDataProcessor;
 use React\Http\Request;
 
@@ -25,6 +26,11 @@ class RequestHandler extends EventEmitter
     protected $processor;
 
     /**
+     * @var bool
+     */
+    private $closed = false;
+
+    /**
      * Create request handler
      */
     public function __construct()
@@ -40,18 +46,25 @@ class RequestHandler extends EventEmitter
         $this->processor = $this->processorFactory->get($request);
 
         if ($this->processor === null) {
-            $request->emit('end');
+            $this->emit('end');
             return;
         }
 
-        $request->on('data', [$this, 'processData']);
-    }
+        $this->processor->on('data', function (FormField $field) {
+            if (false == $this->closed) {
+                $this->emit('data', [$field]);
+            }
+        });
 
-    /**
-     * @param $data
-     */
-    public function processData($data)
-    {
-        $this->processor->process($data);
+        $this->processor->on('end', function () {
+            if (false === $this->closed) {
+                $this->closed = true;
+                $this->emit('end');
+            }
+        });
+
+        $request->on('data', function ($data, $end) {
+            $this->processor->process($data, $end);
+        });
     }
 }

@@ -10,13 +10,20 @@ namespace React\Http\Processor;
 
 
 use Evenement\EventEmitter;
+use React\Http\Utils\Dictionary;
 
 class FormField extends EventEmitter
 {
+    const ORIGINAL_FILENAME = 'original_filename';
+
     /**
      * @var string
      */
     private $name;
+
+    public $attributes;
+
+    private $file = false;
 
     /**
      * @param string $name
@@ -24,6 +31,7 @@ class FormField extends EventEmitter
     public function __construct($name = '')
     {
         $this->name = $name;
+        $this->attributes = new Dictionary();
     }
 
     /**
@@ -32,5 +40,21 @@ class FormField extends EventEmitter
     public function getName()
     {
         return $this->name;
+    }
+
+    /**
+     * @return boolean
+     */
+    public function isFile()
+    {
+        return $this->file;
+    }
+
+    /**
+     * @param boolean $file
+     */
+    public function setFile($file)
+    {
+        $this->file = $file;
     }
 }

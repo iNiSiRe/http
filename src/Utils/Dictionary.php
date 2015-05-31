@@ -18,7 +18,7 @@ class Dictionary
 
     public function __construct($items = [])
     {
-        $this->items = [];
+        $this->items = $items;
     }
 
     public function get($key, $default = null)
