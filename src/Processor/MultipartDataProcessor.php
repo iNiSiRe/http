@@ -115,15 +115,26 @@ class MultipartDataProcessor extends AbstractProcessor
             $delimiter = "\r\n\r\n";
 
             if (false === $position = strpos($data, $delimiter, $offset)) {
-                throw new \Exception('Bad multipart headers');
+
+                $buffer = substr($data, $offset);
+                $this->events->removeAllListeners('data');
+                $this->events->on('data', function ($data, $end) use ($buffer) {
+                    $this->parseData($buffer . $data, $end);
+                    $this->events->on('data', [$this, 'parseData']);
+                });
+
+                break;
+
+            } else {
+                $rawHeaders = substr($data, $offset, $position - $offset);
             }
 
-            $rawHeaders = substr($data, $offset, $position - $offset);
             $headers = $this->parseHeaders($rawHeaders);
 
             $offset = $position + strlen($delimiter);
 
             switch (true) {
+
                 case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
 
                     $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
