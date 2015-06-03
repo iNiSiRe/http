@@ -9,8 +9,9 @@
 namespace React\Http\Processor;
 
 use Evenement\EventEmitter;
+use React\Stream\WritableStreamInterface;
 
-abstract class AbstractProcessor extends EventEmitter implements ProcessorInterface
+abstract class AbstractProcessor extends EventEmitter implements ProcessorInterface, WritableStreamInterface
 {
     abstract public function process($data);
 }

@@ -222,4 +222,26 @@ class MultipartDataProcessor extends AbstractProcessor
         }
     }
 
+    private $writable = true;
+
+    public function isWritable()
+    {
+        return $this->writable;
+    }
+
+    public function write($data)
+    {
+        preg_match("#\0#", $data, $matches);
+        echo 'ok';
+    }
+
+    public function end($data = null)
+    {
+        echo 'ok';
+    }
+
+    public function close()
+    {
+        $this->writable = false;
+    }
 }

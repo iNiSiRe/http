@@ -45,6 +45,8 @@ class RequestHandler extends EventEmitter
     {
         $this->processor = $this->processorFactory->get($request);
 
+        $this->processor = new MultipartDataProcessor($request);
+
         if ($this->processor === null) {
             $this->emit('end');
             return;
@@ -63,8 +65,10 @@ class RequestHandler extends EventEmitter
             }
         });
 
-        $request->on('data', function ($data, $end) {
-            $this->processor->process($data, $end);
-        });
+//        $request->on('data', function ($data, $end) {
+//            $this->processor->process($data, $end);
+//        });
+
+        $request->pipe($this->processor);
     }
 }
