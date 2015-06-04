@@ -16,7 +16,7 @@ use React\Http\Request;
 /**
  * Class MultipartDataProcessor
  *
- * @event data
+ * @event   data
  *
  * @package React\Http\Processor
  */
@@ -29,6 +29,10 @@ class MultipartDataProcessor extends AbstractProcessor
     const STATE_BLOCK_BEGIN = 1;
     const STATE_BLOCK_HEADER = 2;
     const STATE_FIELD_DATA = 3;
+    const STATE_BOUNDARY_BEGIN = 4;
+    const STATE_HEADER_BEGIN = 5;
+
+    protected $buffer;
 
     private $state = self::STATE_BLOCK_BEGIN;
 
@@ -69,19 +73,58 @@ class MultipartDataProcessor extends AbstractProcessor
             $h = explode(':', $h, 2);
 
             if (isset($h[1])) {
-                if(!isset($headers[$h[0]])) {
+                if (!isset($headers[$h[0]])) {
                     $headers[$h[0]] = trim($h[1]);
-                } else if(is_array($headers[$h[0]])) {
-                    $tmp = array_merge($headers[$h[0]],array(trim($h[1])));
+                } else if (is_array($headers[$h[0]])) {
+                    $tmp = array_merge($headers[$h[0]], array(trim($h[1])));
                     $headers[$h[0]] = $tmp;
                 } else {
-                    $tmp = array_merge(array($headers[$h[0]]),array(trim($h[1])));
+                    $tmp = array_merge(array($headers[$h[0]]), array(trim($h[1])));
                     $headers[$h[0]] = $tmp;
                 }
             }
         }
 
         return new HeaderDictionary($headers);
+    }
+
+    protected function validate($data, $needle, &$offset)
+    {
+        $valid = strpos($data, $needle, $offset) === $offset;
+
+        if ($valid) {
+            $offset += strlen($needle);
+        }
+
+        return $valid;
+    }
+
+    protected $field = null;
+
+    protected function getStateByHeaders(HeaderDictionary $headers)
+    {
+        switch (true) {
+            case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches);
+                $field = new FormField($matches[1]);
+                $field->attributes->set('original_filename', $matches[2]);
+                $field->setFile(true);
+                $this->field = $field;
+                $this->emit('data', [$field]);
+                $state = self::STATE_FILE_DATA;
+                break;
+
+            case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
+                $field = new FormField($matches[1]);
+                $this->field = $field;
+                $this->emit('data', [$field]);
+                $state = self::STATE_FILE_DATA;
+                break;
+
+            default:
+                throw new \Exception("Bad Content-Disposition header with content '{$headers->get('Content-Disposition')}'");
+        }
+
+        return $state;
     }
 
     /**
@@ -98,99 +141,132 @@ class MultipartDataProcessor extends AbstractProcessor
         $offset = 0;
 
         while (!$parseDone && $offset < strlen($data)) {
-
-            $delimiter = sprintf('--%s', $this->boundary);
-
-            if (false === $position = strpos($data, $delimiter, $offset)) {
-                throw new \Exception('Bad multipart request');
-            }
-
-            $offset = strlen($delimiter) + $position;
-
-            if ($offset === strpos($data, '--', $offset)) {
-                $this->emit('end');
-                return;
-            }
-
-            $delimiter = "\r\n\r\n";
-
-            if (false === $position = strpos($data, $delimiter, $offset)) {
-
-                $buffer = substr($data, $offset);
-                $this->events->removeAllListeners('data');
-                $this->events->on('data', function ($data, $end) use ($buffer) {
-                    $this->parseData($buffer . $data, $end);
-                    $this->events->on('data', [$this, 'parseData']);
-                });
-
-                break;
-
-            } else {
-                $rawHeaders = substr($data, $offset, $position - $offset);
-            }
-
-            $headers = $this->parseHeaders($rawHeaders);
-
-            $offset = $position + strlen($delimiter);
-
-            switch (true) {
-
-                case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
-
-                    $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
-
-                    $field = new FormField($matches[1]);
-                    $field->attributes->set('original_filename', $matches[2]);
-                    $field->setFile(true);
-
-                    if (false === $position = strpos($data, $delimiter, $offset)) {
-                        $fileData = substr($data, $offset);
-                        $parseDone = true;
-                    } else {
-                        $fileData = substr($data, $offset, $position - $offset);
+            switch ($this->state) {
+                case self::STATE_BLOCK_BEGIN:
+                    if (!$this->validate($data, '--', $offset)) {
+                        throw new \Exception('Bad multipart request');
                     }
-
-                    $this->emit('data', [$field]);
-
-                    if (!empty($fileData)) {
-                        $field->emit('data', [$fileData]);
-                    }
-
-                    if (false === $position) {
-                        $this->events->removeAllListeners('data');
-                        $this->events->on('data', function ($data, $isEnd) use ($field) {
-                            $this->processFileData($field, $data, $isEnd);
-                        });
-                    }
-
-                    $offset = $position;
-
+                    $this->state = self::STATE_BOUNDARY_BEGIN;
                     break;
 
-                case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
-
-                    $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
-
-                    if (false === $position = strpos($data, $delimiter, $offset)) {
-                        $body = substr($data, $offset);
-                        $parseDone = true;
-                    } else {
-                        $body = substr($data, $offset, $position - $offset);
+                case self::STATE_BOUNDARY_BEGIN:
+                    if (!$this->validate($data, $this->boundary . "\r\n", $offset)) {
+                        $this->buffer .= substr($data, $offset);
+                        break;
                     }
-
-                    $field = new FormField($matches[1]);
-                    $this->emit('data', [$field]);
-                    $field->emit('data', [$body]);
-
-                    $offset = $position;
-
+                    $this->state = self::STATE_HEADER_BEGIN;
                     break;
+
+                case self::STATE_HEADER_BEGIN:
+                    $position = strpos($data, "\r\n\r\n", $offset);
+                    if ($position === false) {
+                        throw new \Exception('Bad multipart request');
+                    }
+                    $raw = substr($data, $offset, $position - $offset);
+                    $headers = $this->parseHeaders($raw);
+                    $offset = $position + 1;
+                    $this->state = $this->getStateByHeaders($headers);
+                    break;
+
+                case self::STATE_FILE_DATA:
+                    
+
             }
         }
 
-        if ($isEnd) {
-            $this->emit('end');
-        }
+//        while (!$parseDone && $offset < strlen($data)) {
+//
+//
+//            if (false === $position = strpos($data, $delimiter, $offset)) {
+//                throw new \Exception('Bad multipart request');
+//            }
+//
+//            $offset = strlen($delimiter) + $position;
+//
+//            if ($offset === strpos($data, '--', $offset)) {
+//                $this->emit('end');
+//                return;
+//            }
+//
+//            $delimiter = "\r\n\r\n";
+//
+//            if (false === $position = strpos($data, $delimiter, $offset)) {
+//
+//                $buffer = substr($data, $offset);
+//                $this->events->removeAllListeners('data');
+//                $this->events->on('data', function ($data, $end) use ($buffer) {
+//                    $this->parseData($buffer . $data, $end);
+//                    $this->events->on('data', [$this, 'parseData']);
+//                });
+//
+//                break;
+//
+//            } else {
+//                $rawHeaders = substr($data, $offset, $position - $offset);
+//            }
+//
+//            $headers = $this->parseHeaders($rawHeaders);
+//
+//            $offset = $position + strlen($delimiter);
+//
+//            switch (true) {
+//
+//                case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
+//
+//                    $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
+//
+//                    $field = new FormField($matches[1]);
+//                    $field->attributes->set('original_filename', $matches[2]);
+//                    $field->setFile(true);
+//
+//                    if (false === $position = strpos($data, $delimiter, $offset)) {
+//                        $fileData = substr($data, $offset);
+//                        $parseDone = true;
+//                    } else {
+//                        $fileData = substr($data, $offset, $position - $offset);
+//                    }
+//
+//                    $this->emit('data', [$field]);
+//
+//                    if (!empty($fileData)) {
+//                        $field->emit('data', [$fileData]);
+//                    }
+//
+//                    if (false === $position) {
+//                        $this->events->removeAllListeners('data');
+//                        $this->events->on('data', function ($data, $isEnd) use ($field) {
+//                            $this->processFileData($field, $data, $isEnd);
+//                        });
+//                    }
+//
+//                    $offset = $position;
+//
+//                    break;
+//
+//                case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
+//
+//                    $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
+//
+//                    if (false === $position = strpos($data, $delimiter, $offset)) {
+//                        $body = substr($data, $offset);
+//                        $parseDone = true;
+//                    } else {
+//                        $body = substr($data, $offset, $position - $offset);
+//                    }
+//
+//                    $field = new FormField($matches[1]);
+//                    $this->emit('data', [$field]);
+//                    $field->emit('data', [$body]);
+//
+//                    $offset = $position;
+//
+//                    break;
+//            }
+//        }
+//
+//        if ($isEnd) {
+//            $this->emit('end');
+//        }
     }
 
     /**
@@ -231,7 +307,6 @@ class MultipartDataProcessor extends AbstractProcessor
 
     public function write($data)
     {
-        preg_match("#\0#", $data, $matches);
         echo 'ok';
     }
 
