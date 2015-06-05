@@ -31,6 +31,7 @@ class MultipartDataProcessor extends AbstractProcessor
     const STATE_FIELD_DATA = 3;
     const STATE_BOUNDARY_BEGIN = 4;
     const STATE_HEADER_BEGIN = 5;
+    const STATE_BLOCK_END = 6;
 
     protected $buffer;
 
@@ -99,6 +100,9 @@ class MultipartDataProcessor extends AbstractProcessor
         return $valid;
     }
 
+    /**
+     * @var FormField
+     */
     protected $field = null;
 
     protected function getStateByHeaders(HeaderDictionary $headers)
@@ -169,8 +173,32 @@ class MultipartDataProcessor extends AbstractProcessor
                     break;
 
                 case self::STATE_FILE_DATA:
-                    
+                    $endFlag = "\r\n--{$this->boundary}";
+                    if (strlen($endFlag) + $offset > strlen($data)) {
+                        $this->buffer .= substr($data, $offset);
+                        break;
+                    }
+                    if ($this->field === null) {
+                        throw new \Exception('Field not created');
+                    }
+                    $position = strpos($data, $endFlag, $offset);
+                    if ($position === false) {
+                        $this->field->emit('data', substr($data, $offset));
+                    } else {
+                        $this->field->emit('data', substr($data, $offset, $position - $offset));
+                        $offset = $position + strlen($endFlag);
+                        $this->state = self::STATE_BLOCK_END;
+                    }
+                    break;
 
+                case self::STATE_BLOCK_END:
+                    if ($this->validate($data, '--', $offset)) {
+                        $this->emit('end');
+                        $parseDone = true;
+                    } else {
+                        $this->state = self::STATE_HEADER_BEGIN;
+                    }
+                    break;
             }
         }
 
