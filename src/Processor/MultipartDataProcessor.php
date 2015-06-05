@@ -169,7 +169,7 @@ class MultipartDataProcessor extends AbstractProcessor
                     break;
 
                 case self::STATE_FILE_DATA:
-                    
+
 
             }
         }
