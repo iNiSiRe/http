@@ -162,13 +162,14 @@ class MultipartDataProcessor extends AbstractProcessor
                     break;
 
                 case self::STATE_HEADER_BEGIN:
-                    $position = strpos($data, "\r\n\r\n", $offset);
+                    $flag = "\r\n\r\n";
+                    $position = strpos($data, $flag, $offset);
                     if ($position === false) {
                         throw new \Exception('Bad multipart request');
                     }
                     $raw = substr($data, $offset, $position - $offset);
                     $headers = $this->parseHeaders($raw);
-                    $offset = $position + 1;
+                    $offset = $position + strlen($flag);
                     $this->state = $this->getStateByHeaders($headers);
                     break;
 
@@ -183,9 +184,10 @@ class MultipartDataProcessor extends AbstractProcessor
                     }
                     $position = strpos($data, $endFlag, $offset);
                     if ($position === false) {
-                        $this->field->emit('data', substr($data, $offset));
+                        $this->field->emit('data', [substr($data, $offset)]);
+                        $parseDone = true;
                     } else {
-                        $this->field->emit('data', substr($data, $offset, $position - $offset));
+                        $this->field->emit('data', [substr($data, $offset, $position - $offset)]);
                         $offset = $position + strlen($endFlag);
                         $this->state = self::STATE_BLOCK_END;
                     }
@@ -195,7 +197,7 @@ class MultipartDataProcessor extends AbstractProcessor
                     if ($this->validate($data, '--', $offset)) {
                         $this->emit('end');
                         $parseDone = true;
-                    } else {
+                    } elseif ($this->validate($data, "\r\n", $offset)) {
                         $this->state = self::STATE_HEADER_BEGIN;
                     }
                     break;
