@@ -52,6 +52,7 @@ class MultipartDataProcessor extends AbstractProcessor
         $this->events->on('data', [$this, 'parseData']);
 
         $this->boundary = $this->parseBoundary($request->headers->get('Content-Type'));
+        $this->buffer = '';
     }
 
     public function process($data, $isEnd = false)
@@ -131,6 +132,25 @@ class MultipartDataProcessor extends AbstractProcessor
         return $state;
     }
 
+    protected function isPartialEnd($data, $flag)
+    {
+        $length = strlen($data);
+        $char = $data[$length - 1];
+        $position = strpos($flag, $char);
+        if ($position === false) {
+            return false;
+        } elseif ($position === 0) {
+            return true;
+        }
+        $part = substr($flag, 0, $position) . $char;
+        $position = strrpos($data, $part);
+        if ($position === false) {
+            return false;
+        }
+
+        return $position + strlen($part) == $length;
+    }
+
     /**
      * Base data processor
      *
@@ -174,16 +194,22 @@ class MultipartDataProcessor extends AbstractProcessor
                     break;
 
                 case self::STATE_FILE_DATA:
-                    $endFlag = "\r\n--{$this->boundary}";
-                    if (strlen($endFlag) + $offset > strlen($data)) {
-                        $this->buffer .= substr($data, $offset);
-                        break;
-                    }
+
                     if ($this->field === null) {
                         throw new \Exception('Field not created');
                     }
+
+                    if ($this->buffer) {
+                        $data = $this->buffer . $data;
+                        $this->buffer = '';
+                    }
+
+                    $endFlag = "\r\n--{$this->boundary}";
                     $position = strpos($data, $endFlag, $offset);
-                    if ($position === false) {
+                    if ($position === false && $this->isPartialEnd($data, $endFlag)) {
+                        $this->buffer = substr($data, $offset);
+                        $parseDone = true;
+                    } elseif ($position === false) {
                         $this->field->emit('data', [substr($data, $offset)]);
                         $parseDone = true;
                     } else {
