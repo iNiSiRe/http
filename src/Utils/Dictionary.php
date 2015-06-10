@@ -28,6 +28,11 @@ class Dictionary
             : $default;
     }
 
+    public function has($key)
+    {
+        return array_key_exists($key, $this->items);
+    }
+
     public function set($key, $value)
     {
         $this->items[$key] = $value;

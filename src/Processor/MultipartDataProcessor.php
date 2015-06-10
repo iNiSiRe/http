@@ -213,7 +213,7 @@ class MultipartDataProcessor extends AbstractProcessor
                         $this->field->emit('data', [substr($data, $offset)]);
                         $parseDone = true;
                     } else {
-                        $this->field->emit('data', [substr($data, $offset, $position - $offset)]);
+                        $this->field->emit('end', [substr($data, $offset, $position - $offset)]);
                         $offset = $position + strlen($endFlag);
                         $this->state = self::STATE_BLOCK_END;
                     }
@@ -229,100 +229,6 @@ class MultipartDataProcessor extends AbstractProcessor
                     break;
             }
         }
-
-//        while (!$parseDone && $offset < strlen($data)) {
-//
-//
-//            if (false === $position = strpos($data, $delimiter, $offset)) {
-//                throw new \Exception('Bad multipart request');
-//            }
-//
-//            $offset = strlen($delimiter) + $position;
-//
-//            if ($offset === strpos($data, '--', $offset)) {
-//                $this->emit('end');
-//                return;
-//            }
-//
-//            $delimiter = "\r\n\r\n";
-//
-//            if (false === $position = strpos($data, $delimiter, $offset)) {
-//
-//                $buffer = substr($data, $offset);
-//                $this->events->removeAllListeners('data');
-//                $this->events->on('data', function ($data, $end) use ($buffer) {
-//                    $this->parseData($buffer . $data, $end);
-//                    $this->events->on('data', [$this, 'parseData']);
-//                });
-//
-//                break;
-//
-//            } else {
-//                $rawHeaders = substr($data, $offset, $position - $offset);
-//            }
-//
-//            $headers = $this->parseHeaders($rawHeaders);
-//
-//            $offset = $position + strlen($delimiter);
-//
-//            switch (true) {
-//
-//                case preg_match('/^form-data; name=\"(.*)\"; filename=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
-//
-//                    $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
-//
-//                    $field = new FormField($matches[1]);
-//                    $field->attributes->set('original_filename', $matches[2]);
-//                    $field->setFile(true);
-//
-//                    if (false === $position = strpos($data, $delimiter, $offset)) {
-//                        $fileData = substr($data, $offset);
-//                        $parseDone = true;
-//                    } else {
-//                        $fileData = substr($data, $offset, $position - $offset);
-//                    }
-//
-//                    $this->emit('data', [$field]);
-//
-//                    if (!empty($fileData)) {
-//                        $field->emit('data', [$fileData]);
-//                    }
-//
-//                    if (false === $position) {
-//                        $this->events->removeAllListeners('data');
-//                        $this->events->on('data', function ($data, $isEnd) use ($field) {
-//                            $this->processFileData($field, $data, $isEnd);
-//                        });
-//                    }
-//
-//                    $offset = $position;
-//
-//                    break;
-//
-//                case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
-//
-//                    $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
-//
-//                    if (false === $position = strpos($data, $delimiter, $offset)) {
-//                        $body = substr($data, $offset);
-//                        $parseDone = true;
-//                    } else {
-//                        $body = substr($data, $offset, $position - $offset);
-//                    }
-//
-//                    $field = new FormField($matches[1]);
-//                    $this->emit('data', [$field]);
-//                    $field->emit('data', [$body]);
-//
-//                    $offset = $position;
-//
-//                    break;
-//            }
-//        }
-//
-//        if ($isEnd) {
-//            $this->emit('end');
-//        }
     }
 
     /**
