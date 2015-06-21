@@ -37,4 +37,9 @@ class Dictionary
     {
         $this->items[$key] = $value;
     }
+
+    public function all()
+    {
+        return $this->items;
+    }
 }

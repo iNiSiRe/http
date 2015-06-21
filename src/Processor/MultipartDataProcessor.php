@@ -44,20 +44,43 @@ class MultipartDataProcessor extends AbstractProcessor
      */
     private $events;
 
+    private $fields = [];
+
     public function __construct(Request $request)
     {
         $this->events = new EventEmitter();
-
-        // Register internal listeners
-        $this->events->on('data', [$this, 'parseData']);
-
         $this->boundary = $this->parseBoundary($request->headers->get('Content-Type'));
         $this->buffer = '';
+
+        $this->events->on('data', [$this, 'handleParsedData']);
+        $this->events->on('end', [$this, 'handleProcessed']);
+    }
+
+    public function handleProcessed()
+    {
+
+    }
+
+    public function handleParsedData(FormField $field)
+    {
+        $buffer = '';
+
+        $field->on('data', function ($data) use (&$buffer) {
+            $buffer .= $data;
+        });
+
+        $field->on('end', function ($data) use (&$buffer, $field) {
+            $name = $field->getName();
+            parse_str($name, $data);
+            if (isset($this->fields[$name])) {
+
+            }
+        });
     }
 
     public function process($data, $isEnd = false)
     {
-        $this->events->emit('data', [$data, $isEnd]);
+        $this->parseData($data, $isEnd);
     }
 
     protected function parseBoundary($header)
@@ -228,35 +251,6 @@ class MultipartDataProcessor extends AbstractProcessor
                     }
                     break;
             }
-        }
-    }
-
-    /**
-     * @param FormField $field
-     * @param           $data
-     * @param bool      $isEnd
-     *
-     * @throws \Exception
-     */
-    private function processFileData(FormField $field, $data, $isEnd = false)
-    {
-        $delimiter = sprintf('%s--%s', "\r\n", $this->boundary);
-
-        if (false === $position = strpos($data, $delimiter)) {
-            $fileData = $data;
-        } else {
-            $fileData = substr($data, 0, $position);
-        }
-
-        $field->emit('data', [$fileData]);
-
-        if (false !== $position) {
-
-            $this->events->removeAllListeners('data');
-            $this->events->on('data', [$this, 'parseData']);
-
-            $this->state = self::STATE_BLOCK_BEGIN;
-            $this->parseData(substr($data, $position), $isEnd);
         }
     }
 
