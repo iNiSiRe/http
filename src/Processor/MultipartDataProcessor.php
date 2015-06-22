@@ -44,7 +44,7 @@ class MultipartDataProcessor extends AbstractProcessor
      */
     private $events;
 
-    private $fields = [];
+    private $requestString = '';
 
     public function __construct(Request $request)
     {
@@ -58,10 +58,29 @@ class MultipartDataProcessor extends AbstractProcessor
 
     public function handleProcessed()
     {
+        $processor = new UrlencodedDataProcessor();
 
+        $processor->on('data', function (FormField $field) {
+            $this->emit('data', [$field]);
+        });
+
+        $processor->on('end', function () {
+           $this->emit('end');
+        });
+
+        $processor->process($this->requestString);
     }
 
     public function handleParsedData(FormField $field)
+    {
+        if ($field->isFile()) {
+            $this->handleMultipart($field);
+        } else {
+            $this->handlePlain($field);
+        }
+    }
+
+    public function handlePlain(FormField $field)
     {
         $buffer = '';
 
@@ -70,12 +89,16 @@ class MultipartDataProcessor extends AbstractProcessor
         });
 
         $field->on('end', function ($data) use (&$buffer, $field) {
-            $name = $field->getName();
-            parse_str($name, $data);
-            if (isset($this->fields[$name])) {
-
-            }
+            $this->requestString = empty($this->requestString)
+                ? $field->getName() . '=' . $buffer . $data
+                : $this->requestString . '&' . $field->getName() . '=' . $buffer . $data;
+            $buffer = '';
         });
+    }
+
+    public function handleMultipart(FormField $field)
+    {
+
     }
 
     public function process($data, $isEnd = false)
@@ -137,14 +160,14 @@ class MultipartDataProcessor extends AbstractProcessor
                 $field->attributes->set('original_filename', $matches[2]);
                 $field->setFile(true);
                 $this->field = $field;
-                $this->emit('data', [$field]);
+                $this->events->emit('data', [$field]);
                 $state = self::STATE_FILE_DATA;
                 break;
 
             case preg_match('/^form-data; name=\"(.*)\"$/', $headers->get('Content-Disposition'), $matches):
                 $field = new FormField($matches[1]);
                 $this->field = $field;
-                $this->emit('data', [$field]);
+                $this->events->emit('data', [$field]);
                 $state = self::STATE_FILE_DATA;
                 break;
 
@@ -244,7 +267,7 @@ class MultipartDataProcessor extends AbstractProcessor
                 
                 case self::STATE_BLOCK_END:
                     if ($this->validate($data, '--', $offset)) {
-                        $this->emit('end');
+                        $this->events->emit('end');
                         $parseDone = true;
                     } elseif ($this->validate($data, "\r\n", $offset)) {
                         $this->state = self::STATE_HEADER_BEGIN;

@@ -33,6 +33,7 @@ class ConnectionHandler extends EventEmitter
              */
             list ($request, $body) = $result;
 
+            $request->remoteAddress = $connection->getRemoteAddress();
             $this->emit('request', array($request));
 
             $connection->on('data', function ($data, $connection, $end) use ($request) {
