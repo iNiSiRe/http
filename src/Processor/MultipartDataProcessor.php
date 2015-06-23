@@ -98,7 +98,7 @@ class MultipartDataProcessor extends AbstractProcessor
 
     public function handleMultipart(FormField $field)
     {
-
+        $this->emit('data', [$field]);
     }
 
     public function process($data, $isEnd = false)
@@ -229,9 +229,18 @@ class MultipartDataProcessor extends AbstractProcessor
 
                 case self::STATE_HEADER_BEGIN:
                     $flag = "\r\n\r\n";
+
+                    if ($this->buffer) {
+                        $data = $this->buffer . $data;
+                        $this->buffer = '';
+                    }
+
                     $position = strpos($data, $flag, $offset);
                     if ($position === false) {
-                        throw new \Exception('Bad multipart request');
+//                        throw new \Exception('Bad multipart request');
+                        $this->buffer .= substr($data, $offset);
+                        $parseDone = true;
+                        break;
                     }
                     $raw = substr($data, $offset, $position - $offset);
                     $headers = $this->parseHeaders($raw);
