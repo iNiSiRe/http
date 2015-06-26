@@ -90,8 +90,8 @@ class MultipartDataProcessor extends AbstractProcessor
 
         $field->on('end', function ($data) use (&$buffer, $field) {
             $this->requestString = empty($this->requestString)
-                ? $field->getName() . '=' . $buffer . $data
-                : $this->requestString . '&' . $field->getName() . '=' . $buffer . $data;
+                ? $field->getName() . '=' . urlencode($buffer . $data)
+                : $this->requestString . '&' . $field->getName() . '=' . urlencode($buffer . $data);
             $buffer = '';
         });
     }

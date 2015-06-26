@@ -24,12 +24,11 @@ class UrlencodedDataProcessor extends AbstractProcessor
 {
     public function process($data)
     {
-        $url = urldecode($data);
-        parse_str($url, $data);
+        parse_str($data, $data);
         foreach ($data as $key => $value) {
             $field = new FormField($key);
             $this->emit('data', [$field]);
-            $field->emit('end', [$value]);
+            $field->emit('end', [urldecode($value)]);
         }
         $this->emit('end');
     }
