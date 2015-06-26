@@ -37,7 +37,7 @@ class UrlencodedDataProcessor extends AbstractProcessor
             }
 
             $this->emit('data', [$field]);
-            $field->emit('end', [urldecode($value)]);
+            $field->emit('end', [$value]);
         }
         $this->emit('end');
     }
