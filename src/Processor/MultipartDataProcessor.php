@@ -182,19 +182,27 @@ class MultipartDataProcessor extends AbstractProcessor
     {
         $length = strlen($data);
         $char = $data[$length - 1];
-        $position = strpos($flag, $char);
-        if ($position === false) {
-            return false;
-        } elseif ($position === 0) {
-            return true;
-        }
-        $part = substr($flag, 0, $position) . $char;
-        $position = strrpos($data, $part);
-        if ($position === false) {
-            return false;
+
+        $offset = 0;
+        while (false !== $position = strpos($flag, $char, $offset)) {
+            $offset = $position + 1;
+
+            if ($position === 0) {
+                return true;
+            }
+
+            $part = substr($flag, 0, $position) . $char;
+            $position = strrpos($data, $part);
+            if ($position === false) {
+                continue;
+            }
+
+            if ($position + strlen($part) == $length) {
+                return true;
+            }
         }
 
-        return $position + strlen($part) == $length;
+        return false;
     }
 
     /**
