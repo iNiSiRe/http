@@ -14,9 +14,9 @@ class Dictionary
     /**
      * @var array
      */
-    private $items;
+    private $items = [];
 
-    public function __construct($items = [])
+    public function __construct(array $items = [])
     {
         $this->items = $items;
     }

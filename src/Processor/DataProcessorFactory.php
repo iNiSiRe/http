@@ -21,12 +21,17 @@ class DataProcessorFactory
 
         switch (true) {
             case (strpos($contentType, 'multipart') !== false):
-                return new MultipartDataProcessor($request);
+                $processor = new MultipartDataProcessor($request);
+                break;
 
             case ($contentType == 'application/x-www-form-urlencoded'):
-                return new UrlencodedDataProcessor($request);
+                $processor = new UrlencodedDataProcessor($request);
+                break;
+
+            default:
+                $processor = new UrlencodedDataProcessor($request);
         }
 
-        return null;
+        return $processor;
     }
 }
