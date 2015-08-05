@@ -63,8 +63,8 @@ class RequestHandler extends EventEmitter
             }
         });
 
-        $request->on('data', function ($data, $end) {
-            $this->processor->process($data, $end);
+        $request->on('data', function ($data) {
+            $this->processor->process($data);
         });
 
 //        $request->pipe($this->processor);

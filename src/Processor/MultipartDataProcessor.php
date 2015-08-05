@@ -101,9 +101,9 @@ class MultipartDataProcessor extends AbstractProcessor
         $this->emit('data', [$field]);
     }
 
-    public function process($data, $isEnd = false)
+    public function process($data)
     {
-        $this->parseData($data, $isEnd);
+        $this->parseData($data);
     }
 
     protected function parseBoundary($header)
@@ -209,11 +209,10 @@ class MultipartDataProcessor extends AbstractProcessor
      * Base data processor
      *
      * @param      $data
-     * @param bool $isEnd
      *
      * @throws \Exception
      */
-    protected function parseData($data, $isEnd = false)
+    protected function parseData($data)
     {
         $parseDone = false;
         $offset = 0;

@@ -11,13 +11,21 @@ namespace React\Http\Processor;
 
 use React\Http\Request;
 
+/**
+ * Class DataProcessorFactory
+ *
+ * @package React\Http\Processor
+ */
 class DataProcessorFactory
 {
+    /**
+     * @param Request $request
+     *
+     * @return MultipartDataProcessor|UrlencodedDataProcessor
+     */
     function get(Request $request)
     {
-        if (null === $contentType = $request->headers->get('Content-Type')) {
-            return null;
-        }
+        $contentType = $request->headers->get('Content-Type', '');
 
         switch (true) {
             case (strpos($contentType, 'multipart') !== false):
