@@ -45,8 +45,6 @@ class RequestHandler extends EventEmitter
     {
         $this->processor = $this->processorFactory->get($request);
 
-//        $this->processor = new MultipartDataProcessor($request);
-
         if ($this->processor === null) {
             $this->emit('end');
             return;
