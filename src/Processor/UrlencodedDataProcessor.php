@@ -22,7 +22,43 @@ use React\Http\Request;
  */
 class UrlencodedDataProcessor extends AbstractProcessor
 {
-    public function process($data)
+    /**
+     * @var Request
+     */
+    private $request;
+
+    /**
+     * @var int
+     */
+    private $contentLength;
+
+    /**
+     * @var string
+     */
+    private $data;
+
+    /**
+     * @var int
+     */
+    private $readLength;
+
+    /**
+     * UrlencodedDataProcessor constructor.
+     *
+     * @param Request $request
+     */
+    public function __construct(Request $request)
+    {
+        $this->request = $request;
+        $this->contentLength = (int) $request->headers->get('content-length');
+        $this->readLength = 0;
+        $this->data = '';
+    }
+
+    /**
+     * @param $data
+     */
+    private function parse($data)
     {
         parse_str($data, $data);
         foreach ($data as $key => $value) {
@@ -40,6 +76,18 @@ class UrlencodedDataProcessor extends AbstractProcessor
             $field->emit('end', [$value]);
         }
         $this->emit('end');
+    }
+
+    /**
+     * @param $data
+     */
+    public function process($data)
+    {
+        $this->readLength += strlen($data);
+        $this->data .= $data;
+        if ($this->readLength >= $this->contentLength) {
+            $this->parse($this->data);
+        }
     }
 
     public function isWritable()
