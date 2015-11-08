@@ -46,8 +46,14 @@ class MultipartDataProcessor extends AbstractProcessor
 
     private $requestString = '';
 
+    /**
+     * @var Request
+     */
+    private $request;
+
     public function __construct(Request $request)
     {
+        $this->request = $request;
         $this->events = new EventEmitter();
         $this->boundary = $this->parseBoundary($request->headers->get('Content-Type'));
         $this->buffer = '';
@@ -58,7 +64,7 @@ class MultipartDataProcessor extends AbstractProcessor
 
     public function handleProcessed()
     {
-        $processor = new UrlencodedDataProcessor();
+        $processor = new UrlencodedDataProcessor($this->request);
 
         $processor->on('data', function (FormField $field) {
             $this->emit('data', [$field]);
@@ -68,7 +74,7 @@ class MultipartDataProcessor extends AbstractProcessor
            $this->emit('end');
         });
 
-        $processor->process($this->requestString);
+        $processor->parse($this->requestString);
     }
 
     public function handleParsedData(FormField $field)

@@ -58,7 +58,7 @@ class UrlencodedDataProcessor extends AbstractProcessor
     /**
      * @param $data
      */
-    private function parse($data)
+    public function parse($data)
     {
         parse_str($data, $data);
         foreach ($data as $key => $value) {
