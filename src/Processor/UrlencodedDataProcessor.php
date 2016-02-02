@@ -64,13 +64,13 @@ class UrlencodedDataProcessor extends AbstractProcessor
         foreach ($data as $key => $value) {
             $field = new FormField($key);
 
-            if (is_array($value)) {
-                array_walk_recursive($value, function (&$value) {
-                    $value = urldecode($value);
-                });
-            } else {
-                $value = urldecode($value);
-            }
+//            if (is_array($value)) {
+//                array_walk_recursive($value, function (&$value) {
+//                    $value = urldecode($value);
+//                });
+//            } else {
+//                $value = urldecode($value);
+//            }
 
             $this->emit('data', [$field]);
             $field->emit('end', [$value]);
